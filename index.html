@@ -389,7 +389,7 @@
       var getDatabase = mods[1].getDatabase, ref = mods[1].ref, onValue = mods[1].onValue, set = mods[1].set;
       var app = initializeApp(FIREBASE_CONFIG);
       var db = getDatabase(app);
-      dbRef = ref(db, 'sharedListMako');
+      dbRef = ref(db, 'sharedList/mako');
       fb = { onValue: onValue, set: set };
 
       syncStatusEl.hidden = false;
