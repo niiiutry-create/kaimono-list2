@@ -306,6 +306,9 @@
     color:var(--ink-muted);
     white-space:nowrap;
   }
+  .purchased-label .purchased-days{
+    font-size:19px;
+  }
 
   .drag-ghost{
     position:fixed;
@@ -546,7 +549,17 @@
       var purchasedLabel = document.createElement('span');
       purchasedLabel.className = 'purchased-label';
       if(item.purchasedAt){
-        purchasedLabel.textContent = item.purchasedAt.m + '月' + item.purchasedAt.d + '日購入';
+        var daysAgo = daysSincePurchase(item.purchasedAt);
+        purchasedLabel.innerHTML = '';
+        if(daysAgo <= 0){
+          purchasedLabel.appendChild(document.createTextNode('今日購入'));
+        } else {
+          var daysSpan = document.createElement('span');
+          daysSpan.className = 'purchased-days';
+          daysSpan.textContent = daysAgo + '日前';
+          purchasedLabel.appendChild(daysSpan);
+          purchasedLabel.appendChild(document.createTextNode('購入'));
+        }
       }
       row.appendChild(purchasedLabel);
     } else {
@@ -571,13 +584,21 @@
     return wrapper;
   }
 
+  function daysSincePurchase(purchasedAt){
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var y = (purchasedAt.y != null) ? purchasedAt.y : now.getFullYear();
+    var purchased = new Date(y, purchasedAt.m - 1, purchasedAt.d);
+    return Math.round((today - purchased) / 86400000);
+  }
+
   function toggleDone(item, recordPurchase){
     var wasDone = item.done;
     item.done = !wasDone;
     if(item.done){
       if(recordPurchase){
         var now = new Date();
-        item.purchasedAt = { m: now.getMonth() + 1, d: now.getDate() };
+        item.purchasedAt = { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() };
       }
     } else {
       item.purchasedAt = null;
