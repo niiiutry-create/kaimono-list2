@@ -337,7 +337,7 @@
 
   <div class="addbar">
     <button type="button" id="markInput" class="mark-input priority-swatch" data-priority="0" aria-label="優先度: なし"></button>
-    <input id="itemInput" name="item-query" class="name-input" placeholder="品名を入力" aria-label="品名" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <input id="itemInput" name="item-query" class="name-input" placeholder="品名を入力" aria-label="品名" maxlength="12" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <button id="addBtn" class="add-btn" aria-label="追加">＋</button>
   </div>
 
@@ -347,6 +347,7 @@
 <script>
 (function(){
   var STORAGE_KEY = 'do-shopping-list-mako-v1';
+  var MAX_TEXT_LEN = 12;
   var OPEN_OFFSET = -84;
   var COMPLETE_OFFSET = 84;
   var COMPLETE_THRESHOLD = 56;
@@ -420,8 +421,14 @@
   }
 
   function applyRemote(data){
-    items = data;
-    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }catch(e){}
+    items = sanitizeItems(data);
+    if(JSON.stringify(items) !== JSON.stringify(data)){
+      // 同期先に長すぎる品名や壊れたデータがあった。詰めた結果を書き戻して
+      // 共有データ自体をきれいにする（放置すると毎回作り直すことになる）。
+      save();
+    } else {
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }catch(e){}
+    }
     render();
   }
 
@@ -439,10 +446,46 @@
     fb.set(dbRef, items).catch(function(){});
   }
 
+  // 品名は12文字まで。maxlength は手入力だけの歯止めなので、貼り付け・
+  // localStorage の改ざん・同期で届くデータも必ずここを通して詰める。
+  function clampText(value){
+    if(typeof value !== 'string') return '';
+    var chars = Array.from(value.replace(/[\u0000-\u001f\u007f]/g, '').trim());
+    return chars.slice(0, MAX_TEXT_LEN).join('');
+  }
+  function sanitizeDate(value){
+    if(!value || typeof value !== 'object') return null;
+    var y = Number(value.y), m = Number(value.m), d = Number(value.d);
+    if(!(y >= 1970 && y <= 9999 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return null;
+    return { y: Math.floor(y), m: Math.floor(m), d: Math.floor(d) };
+  }
+  function sanitizeItems(data){
+    if(!Array.isArray(data)) return [];
+    var clean = [];
+    for(var i = 0; i < data.length; i++){
+      var item = data[i];
+      if(!item || typeof item !== 'object') continue;
+      var text = clampText(item.text);
+      if(!text) continue;
+      var priority = Number(item.priority);
+      if(!(priority >= 0 && priority < PRIORITY_LABELS.length)) priority = 0;
+      var fresh = {
+        id: typeof item.id === 'string' ? item.id.slice(0, 64) : uid(),
+        priority: Math.floor(priority),
+        text: text,
+        done: item.done === true
+      };
+      var when = sanitizeDate(item.purchasedAt);
+      if(when) fresh.purchasedAt = when;
+      clean.push(fresh);
+    }
+    return clean;
+  }
+
   function load(){
     try{
       var raw = localStorage.getItem(STORAGE_KEY);
-      if(raw) return JSON.parse(raw);
+      if(raw) return sanitizeItems(JSON.parse(raw));
     }catch(e){}
     return [
       {id:uid(), priority:0, text:'キャベツ', done:false},
@@ -651,7 +694,7 @@
   });
 
   function addItem(keepFocus){
-    var text = nameInput.value.trim();
+    var text = clampText(nameInput.value);
     if(!text) { if(keepFocus) nameInput.focus(); return; }
     items.unshift({id:uid(), priority:addPriority, text:text, done:false});
     nameInput.value = '';
